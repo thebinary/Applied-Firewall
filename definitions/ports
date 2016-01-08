@@ -1,0 +1,24 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# Service Ports Definitions
+#
+# This Definition file contains Service Ports to be used with this AppliedFirewall
+# Service Ports must exist in this file to be allowed to be used within this AppliedFirewall System
+# Direct Mentioning of Ports on other configuration files WILL NOT WORK
+#
+# RULES
+#       - The Service Port Names must be prefixed with "PORT_" (without the quotes)
+#       - The Ports must be mentioned within quotes (") or (')
+#       - Multiple Ports are to be separated with space ( )
+#
+# EXAMPLES
+#	PORT_SSH="22"
+#	PORT_FTP="20 21"
+
+PORT_SSH="22"
+PORT_SNMP="161"
+PORT_DNS="53"
+PORT_HTTP="80"
+PORT_HTTPS="443"
+PORT_NTP="123"

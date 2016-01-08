@@ -1,0 +1,15 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# INBOUND PING Rule
+# This file defines the variable 'IN_ICMP'
+# This variable includes the hosts or networks allowed to PING THIS MACHINE
+# The SPACE SEPARATED values are HOST variables defined on 'definitions/hosts_and_networks' definition file
+#
+# EXAMPLES
+# If 'definitions/hosts_and_networks' defines a host 'HOST_SERVER1' and a network 'HOST_NETWORK1' which are to be allowed to ping this machine
+# The IN_ICMP should be set as
+# IN_ICMP="SERVER1 NETWORK1"
+#
+
+IN_ICMP="LOG NAGIOS_SRV_01 CORPORATE_LAN ANY"

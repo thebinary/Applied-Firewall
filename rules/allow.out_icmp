@@ -1,0 +1,15 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# OUTBOUND PING Rule
+# This file defines the variable 'OUT_ICMP'
+# This variable includes the hosts or networks THIS MACHINE IS ALLOWED TO PING
+# The SPACE SEPARATED values are HOST variables defined on 'definitions/hosts_and_networks' definition file
+#
+# EXAMPLES
+# If 'definitions/hosts_and_networks' defines a host 'HOST_SERVER1' and a network 'HOST_NETWORK1' which this machine is allowed to ping
+# The IN_ICMP should be set as
+# OUT_ICMP="SERVER1 NETWORK1"
+#
+
+OUT_ICMP="ANY"

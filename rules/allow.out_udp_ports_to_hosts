@@ -1,0 +1,21 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# OUTBOUND ALLOWED HOSTS FOR TCP <PORT>
+# This file defines the variables 'OUTTCP_<PORT>'
+# These variable includes the TCP <PORT> ON LOCAL MACHINE TO BE ALLOWED FROM defined HOSTS
+# The variable names are "OUT<PORT>", where <PORT> is defined variable on 'definitions/ports' without the "PORT_" prefix
+# The SPACE SEPARATED values are HOST variables defined on 'definitions/hosts_and_networks' definition file without the "HOST_" prefix
+#
+# EXAMPLES
+# 'definitions/ports' defines ports 'PORT_SSH' and 'PORT_HTTP'
+# 'definitions/hosts_and_networks' defines host 'HOST_SERVER1' and network 'HOST_NETWORK1'
+# And now if TCP PORT_SSH on REMOTE HOST_SERVER1 is to be allowed from LOCALHOST
+# And TCP PORT_HTTP on REMOTE HOSTS HOST_SERVER1 and HOST_NETWORK1 from LOCALHOST
+# OUT_SSH and OUT_HTTP variables are to be set as follows
+# OUT_SSH="SERVER1"
+# OUT_HTTP="SERVER1 NETWORK1"
+#
+
+OUT_DNS=""
+OUT_NTP="VISHNU"

@@ -1,0 +1,19 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# Display Characteristics DDefinitions
+#
+# Only For Advanced Usage
+# This file does not effect IPtables functions
+# It only define the display characteristics of this AppliedFirewall
+#
+
+COLOR_HEADER="23"
+COLOR_INFO="242"
+COLOR_WARN="208"
+COLOR_ERROR="9"
+COLOR_ALLOW="64"
+COLOR_DROP="88"
+COLOR_ADVANCED="31"
+TAB1="10"
+TAB2="8"

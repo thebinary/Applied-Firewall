@@ -1,0 +1,15 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# OUTBOUND ALLOWED HOSTS FOR UDP
+# This file defines the variable 'OUT_UDP_HOSTS'
+# This variable includes the hosts or networks which are to be ALLOWED ANY UDP PORT IN OUTBOUND DIRECTION
+# The SPACE SEPARATED values are HOST variables defined on 'definitions/hosts_and_networks' definition file without the "HOST_" prefix
+#
+# EXAMPLES
+# If 'definitions/hosts_and_networks' defines a host 'HOST_SERVER1' and a network 'HOST_NETWORK1' whose ANY UDP PORT is to be reachable
+# The OUT_UDP_HOSTS should be set as
+# OUT_UDP_HOSTS="SERVER1 NETWORK1"
+#
+
+OUT_UDP_HOSTS=""

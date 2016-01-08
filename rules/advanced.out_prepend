@@ -1,0 +1,13 @@
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# OUTPUT CHAIN Rules - Prepend
+# Only for Advanced Usage
+#
+# This file defines rules for OUTPUT CHAIN in the default IPTables command line entry format
+# Assuming an implicit 'iptables -A OUTPUT ' at the beginning of each rule
+# These IPTable Rules are applied before any other configuration files on the OUTPUT CHAIN
+#
+# EXAMPLES
+# -p tcp --dport 80 -j ACCEPT
+#
+

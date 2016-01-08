@@ -1,0 +1,16 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# FORWARD CHAIN Rules
+# Only for Advanced Usage
+#
+# This file defines rules for FORWARD CHAIN
+# in the default IPTables command line entry format
+# prepending an implicit 'iptables ' on each rule
+#
+# EXAMPLES
+# -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+# -A FORWARD -i eth1 -o eth0 -j ACCEPT
+#
+
+

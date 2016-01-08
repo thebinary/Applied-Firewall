@@ -1,0 +1,20 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# INBOUND ALLOWED HOSTS FOR TCP <PORT>
+# This file defines the variables 'IN_<PORT>'
+# These variable includes the TCP <PORT> ON LOCAL MACHINE TO BE ALLOWED FROM defined HOSTS
+# The variable names are "IN_<PORT>", where <PORT> is defined variable on 'definitions/ports' without the "PORT_" prefix
+# The SPACE SEPARATED values are HOST variables defined on 'definitions/hosts_and_networks' definition file without the "HOST_" prefix
+#
+# EXAMPLES
+# 'definitions/ports' defines ports 'PORT_SSH' and 'PORT_HTTP'
+# 'definitions/hosts_and_networks' defines host 'HOST_SERVER1' and network 'HOST_NETWORK1' 
+# And now if TCP PORT_SSH on LOCALHOST is to be allowed from HOST_SERVER1
+# And TCP PORT_HTTP on LOCALHOST is to be allowed from HOST_SERVER1 and HOST_NETWORK1
+# IN_SSH and IN_HTTP variables are to be set as follows  
+# IN_SSH="SERVER1"
+# IN_HTTP="SERVER1 NETWORK1"
+#
+
+IN_SSH="LOG"

@@ -1,0 +1,77 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# Policies Definitions
+#
+# This Definition File consists 
+#	- Default policies for IPTables chains - INPUT, OUTPUT and FORWARD
+#	- Debug Mode Output
+#	- Other Policies including YUM Repos Allow or Disallow
+#
+# RULES
+#	- The allowed Variable Names are mentioned in following Sections
+#	- The Values must be included within quotes (") or (')
+#
+
+
+########################################################### Debug Output
+# VARIABLE
+#	- DEBUG_MODE		: Flag to Enable or Disable System stderr
+# VALUES
+#	- Allowed Values	: YES and NO
+#	- Default Value		: NO
+#	- Recommended Value	: NO
+
+# DEBUG Mode
+DEBUG_MODE="NO"
+#DEBUG_MODE="YES"
+
+
+
+############################################################ IPTables Chains
+# VARIABLES
+#	- DEFAULT_INPUT		: Default Policy for INPUT Chain
+#	- DEFAULT_OUTPUT	: Default Policy for OUTPUT Chain
+#	- DEFAULT_FORWARD	: Default Policy for FORWARD Chain
+# VALUES
+# 	- Allowed Values	: DROP and ACCEPT
+#	- Default Values	: ACCEPT
+#	- Recommended Values	: DROP (except for temporary purpose)
+# EXAMPLES
+#	DEFAULT_INPUT="DROP"
+#	DEFAULT_FORWARD="ACCEPT"
+# 
+
+# IPTables Chains
+DEFAULT_INPUT="DROP"
+#DEFAULT_INPUT="ACCEPT"
+DEFAULT_OUTPUT="DROP"
+#DEFAULT_OUTPUT="ACCEPT"
+DEFAULT_FORWARD="DROP"
+#DEFAULT_FORWARD="ACCEPT"
+
+
+
+############################################################ YUM Repos
+# VARIABLES
+#	- DEBUG_MODE		: If NO, disables system stderr, and only displays firewall generated errors
+# VALUES
+#	- Allowed Values	: YES and NO
+#	- Default Value		: NO
+#	- Recommended Value	: NO (Except for Debugging Purpose)
+#
+############################################################ YUM Repos
+# VARIABLES
+#	- YUM_ENABLE		: Whether to allow YUM Repo IPs (HTTP) or not
+# VALUES
+#	- Allowd Values		: YES and NO
+#	- Default Value		: NO
+#	- Recommened Value	: NO (except for temporary purpose) 
+# EXAMPLES
+#	YUM_ENABLE="NO"
+#
+#
+
+# YUM Repos
+#YUM_ENABLE="NO"
+#YUM_ENABLE="YES"

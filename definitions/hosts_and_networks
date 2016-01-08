@@ -1,0 +1,22 @@
+# AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# Hosts and Networks Definitions
+#
+# This Definition file contains Hosts and Networks to be used with this AppliedFirewall
+# Host and Network IPs must exist in this file to be allowed to be used within this AppliedFirewall System
+# Direct Mentioning of IPs on other configuration files WILL NOT WORK
+#
+# RULES
+# 	- The Host/Network Names must be prefixed with "HOST_" (without the quotes)
+# 	- The IPs must be mentioned within quotes (") or (')
+#	- Multiple IPs are to be separated with space ( )
+#
+# EXAMPLES
+#	HOST_SEVER_NET="1.2.3.0/24"
+#	HOST_DNS="2.3.4.5"
+
+HOST_ANY="0.0.0.0/0"
+HOST_SERVER_NET="1.2.3.0/24"
+HOST_CORPORATE_LAN="10.1.0.0/24"
+HOST_SERVER1="1.2.3.1"

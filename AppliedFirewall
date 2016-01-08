@@ -1,0 +1,766 @@
+#!/bin/bash
+
+# AppliedFirewall
+# 2014-09-06
+# thebinary <binary4bytes@gmail.com>
+
+IPFW="/sbin/iptables"
+WORK_DIR="/usr/admin/AppliedFirewall"
+RULES_DIR="$WORK_DIR/rules"
+DEFINITIONS_DIR="$WORK_DIR/definitions"
+
+IPTABLES_PREVIOUS="/etc/sysconfig/iptables.firewall"
+
+C_HOSTS_AND_NETWORKS="$DEFINITIONS_DIR/hosts_and_networks"
+C_PORTS="$DEFINITIONS_DIR/ports"
+C_POLICIES="$DEFINITIONS_DIR/policies"
+C_DISPLAY="$DEFINITIONS_DIR/display"
+
+C_IN_ADVANCED_PREPEND="$RULES_DIR/advanced.in_prepend"
+C_IN_ADVANCED_APPEND="$RULES_DIR/advanced.in_append"
+C_IN_ICMP="$RULES_DIR/allow.in_icmp"
+C_IN_TCP_ALLOWS="$RULES_DIR/allow.in_tcp_ports_from_hosts"
+C_IN_TCP_ALL_ALLOWS="$RULES_DIR/allow.in_tcp_ports_from_any"
+C_IN_TCP_HOST_ALLOWS="$RULES_DIR/allow.in_tcp_from_hosts"
+C_IN_UDP_ALLOWS="$RULES_DIR/allow.in_udp_ports_from_hosts"
+C_IN_UDP_ALL_ALLOWS="$RULES_DIR/allow.in_udp_ports_from_any"
+C_IN_UDP_HOST_ALLOWS="$RULES_DIR/allow.in_udp_from_hosts"
+
+C_OUT_ADVANCED_PREPEND="$RULES_DIR/advanced.out_prepend"
+C_OUT_ADVANCED_APPEND="$RULES_DIR/advanced.out_append"
+C_OUT_ICMP="$RULES_DIR/allow.out_icmp"
+C_OUT_TCP_ALLOWS="$RULES_DIR/allow.out_tcp_ports_to_hosts"
+C_OUT_TCP_ALL_ALLOWS="$RULES_DIR/allow.out_tcp_ports_to_any"
+C_OUT_TCP_HOST_ALLOWS="$RULES_DIR/allow.out_tcp_to_hosts"
+C_OUT_UDP_ALLOWS="$RULES_DIR/allow.out_udp_ports_to_hosts"
+C_OUT_UDP_ALL_ALLOWS="$RULES_DIR/allow.out_udp_ports_to_any"
+C_OUT_UDP_HOST_ALLOWS="$RULES_DIR/allow.out_udp_to_hosts"
+
+C_FORWARD_ADVANCED="$RULES_DIR/advanced.forward"
+
+COMMON_CONFIGURATIONS="$C_HOSTS_AND_NETWORKS $C_PORTS $C_POLICIES"
+IN_CONFIGURATIONS="$C_IN_ICMP $C_IN_TCP_ALLOWS $C_IN_TCP_ALL_ALLOWS $C_IN_TCP_HOST_ALLOWS $C_IN_UDP_ALLOWS $C_IN_UDP_ALL_ALLOWS $C_IN_UDP_HOST_ALLOWS"
+OUT_CONFIGURATIONS="$C_OUT_ICMP $C_OUT_TCP_ALLOWS $C_OUT_TCP_ALL_ALLOWS $C_OUT_TCP_HOST_ALLOWS $C_OUT_UDP_ALLOWS $C_OUT_UDP_ALL_ALLOWS $C_OUT_UDP_HOST_ALLOWS"
+
+########################################################## COLORS
+COLOR_HEADER="23"
+COLOR_INFO="242"
+COLOR_WARN="208"
+COLOR_ERROR="9"
+COLOR_ALLOW="64"
+COLOR_DROP="88"
+COLOR_ADVANCED="31"
+TAB1="10"
+TAB2="8"
+[ -e "$C_DISPLAY" ] && source $C_DISPLAY
+
+########################################################## FUNCTIONS
+
+function Header() {
+	echo ""
+	printf "\e[1m\e[38;5;${COLOR_HEADER}m[+] %s\e[0m\n" "$@"
+}
+
+function Info() {
+	printf "\e[38;5;${COLOR_INFO}m%-${TAB1}s%s\e[0m\n" " " "$@"
+}
+
+function AdvancedInfo() {
+	printf "\e[38;5;${COLOR_ADVANCED}m%-${TAB1}s%-${TAB2}s\e[0m%s\n" " " "Advanc" "$@"
+}
+
+function Error() {
+	printf "\e[1m\e[38;5;${COLOR_ERROR}m%-${TAB1}s\e[0m%s\n" "ERROR" "$@"
+}
+
+function RedAccept() {
+	printf "\e[1m\e[38;5;${COLOR_ERROR}m%-${TAB1}s%-${TAB2}s\e[0m%s" " " "ACCEPT" "$@"
+}
+
+function GreenDrop() {
+	printf "\e[1m\e[38;5;${COLOR_ALLOW}m%-${TAB1}s%-${TAB2}s\e[0m%s" " " "DROP" "$@"
+}
+
+function Warn() {
+	printf "\e[1m\e[38;5;${COLOR_WARN}m%-${TAB1}s\e[0m%s\n" "WARNING" "$@"
+}
+
+function NextLine(){
+	printf "%-${TAB1}s%s\n" " " "$@"
+}
+
+function OK() {
+	printf "\e[38;5;${COLOR_ALLOW}m%-${TAB1}s\e[0m%s\n" "OK" "$@"
+}
+
+function Accept() {
+	printf "\e[38;5;${COLOR_ALLOW}m%-${TAB1}s%-${TAB2}s\e[0m" " " "Accept"
+}
+
+function RestoreIPTables() {
+	Header "Reverting to Previous Rules"
+	Error "Due to some ERRORS, NO CHANGE IS APPLIED. Rules are REVERTED to Previous Saved State."
+	${IPFW}-restore < $IPTABLES_PREVIOUS
+	echo ""
+}
+
+function SaveIPTables() {
+	Header "Saving Rules"
+	${IPFW}-saving > $IPTABLES_PREVIOUS
+	echo ""
+}
+
+function RaiseError() {
+	Error "$1"
+	RestoreIPTables
+	exit 1
+}
+
+function SyntaxError() {
+	RaiseError "Syntax Error in '$1'"
+}
+
+function NonExistError() {
+	RaiseError "'$1' does not exist"
+}
+
+function VariableError() {
+	RaiseError "'$1' used in 'rules/`basename $2`' BUT '$3' not defined in 'definitions/`basename $4`'"
+}
+
+function CheckSyntax() {
+	CMD="$1"
+	$CMD
+	[ $? -eq 0 ] || SyntaxError "$CMD"
+}
+
+function ValidateIP() {
+	echo "$1" | grep -E "^[\t\ ]*([0-9]\.|[0-9][0-9]\.|1[0-9][0-9]\.|2[0-5][0-5]\.){3}([0-9]|[0-9][0-9]|1[0-9][0-9]|(2[0-4][0-9]|25[0-5]))(/[0-9]{1,2}){0,1}[\t ]*$" > /dev/null
+	[ $? -ne 0 ] && RaiseError "Invalid IP - '$1'"
+}
+
+function AcceptInPort() {
+	A_CHAIN="$1"
+	A_PROTOCOL="$2"
+	A_PORT="$3"
+	A_PORT_NAME="$4"
+	A_HOST="$5"
+	A_HOST_NAME="$6"
+
+	FROM='from '"$A_HOST_NAME "'('"$A_HOST"') to me'
+	[ -z "$A_HOST" ] && FROM="from any to me"
+	FROM="$FROM"' on '"$A_PROTOCOL"' port '"$A_PORT_NAME"' ['"$A_PORT"']'
+
+	echo -en "\e[0m"; Accept; echo -en "\e[0m"; echo "$FROM"
+	if [ -z "$A_HOST" ]
+	then
+       		CMD="${IPFW} -A $A_CHAIN -p $A_PROTOCOL --dport $A_PORT -j ACCEPT"
+	else
+		ValidateIP "$A_HOST"
+       		CMD="${IPFW} -A $A_CHAIN --src "$A_HOST" -p $A_PROTOCOL --dport $A_PORT -j ACCEPT"
+	fi
+	$CMD
+	[ $? -eq 0 ] || RaiseError "$CMD"
+}
+
+function AcceptInHost() {
+	A_CHAIN="$1"
+	A_HOST="$2"
+	A_HOST_NAME="$3"
+
+	FROM='from '"$A_HOST "'('"$A_HOST_NAME"') to me on any port'
+
+	echo -en "\e[0m"; Accept; echo -en "\e[0m"; echo "$FROM"
+	ValidateIP "$A_HOST"
+       	CMD="${IPFW} -A $A_CHAIN --src "$A_HOST" -j ACCEPT"
+	$CMD
+	[ $? -eq 0 ] || RaiseError "$CMD"
+}
+
+function AcceptOutPort() {
+	A_CHAIN="$1"
+	A_PROTOCOL="$2"
+	A_PORT="$3"
+	A_PORT_NAME="$4"
+	A_HOST="$5"
+	A_HOST_NAME="$6"
+
+	FROM='from me to '"$A_HOST_NAME "'('"$A_HOST"')'
+	[ -z "$A_HOST" ] && FROM="from me to any"
+	FROM="$FROM"' on '"$A_PROTOCOL"' port '"$A_PORT_NAME"' ['"$A_PORT"']'
+
+	echo -en "\e[0m"; Accept; echo -en "\e[0m"; echo "$FROM"
+	if [ -z "$A_HOST" ]
+	then
+       		CMD="${IPFW} -A $A_CHAIN -p $A_PROTOCOL --dport $A_PORT -j ACCEPT"
+	else
+		ValidateIP "$A_HOST"
+       		CMD="${IPFW} -A $A_CHAIN --dst "$A_HOST" -p $A_PROTOCOL --dport $A_PORT -j ACCEPT"
+	fi
+	$CMD
+	[ $? -eq 0 ] || RaiseError "$CMD"
+}
+
+function AcceptOutHost() {
+	A_CHAIN="$1"
+	A_HOST="$2"
+	A_HOST_NAME="$3"
+
+	FROM='from me to '"$A_HOST "'('"$A_HOST_NAME"') on any port'
+
+	echo -en "\e[0m"; Accept; echo -en "\e[0m"; echo "$FROM"
+	ValidateIP "$A_HOST"
+       	CMD="${IPFW} -A $A_CHAIN --dst "$A_HOST" -j ACCEPT"
+	$CMD
+	[ $? -eq 0 ] || RaiseError "$CMD"
+}
+
+function CreateChain() {
+	CMD="${IPFW} -N $1"
+	$CMD
+	[ $? -eq 0 ] || RaiseError "$CMD"
+	OK "'YUM' Chain Created"
+}
+
+function ChainToChain(){
+	PARENT_CHAIN="$1"
+	CHILD_CHAIN="$2"
+	CMD="${IPFW} -A $PARENT_CHAIN -j $CHILD_CHAIN"
+	$CMD
+	[ $? -eq 0 ] || RaiseError "$CMD"
+}
+
+function SaveIPTables() {
+	Header "Saving IPTables"
+	${IPFW}-save > $IPTABLES_PREVIOUS
+}
+
+function DebugCheck() {
+	DEBUG_MODE=`grep "DEBUG_MODE" $C_POLICIES | grep -v '^\ *#' |  awk -F'=' '{print $2}' | sed "s/\"//g; s/\ //g" | tail -1 2>/dev/null`
+	if [ "$DEBUG_MODE" = "YES" ]
+	then
+		Warn "DEBUG_MODE='YES'"
+		NextLine "It is recommended 'DEBUG_MODE' is set to 'NO' in 'definitions/`basename $C_POLICIES`' except for debugging."
+	else
+		exec 2<&-
+	fi
+}
+
+function CheckConfig() {
+	Header "Checking Configuration Files"
+	DebugCheck
+	CONFIGURATIONS="$1"
+	for CONFIG in ${CONFIGURATIONS} 
+	{
+		[ ! -e "$CONFIG" ] && NonExistError "$CONFIG"
+        	source $CONFIG
+        	[ $? -ne 0 ] && SyntaxError "$CONFIG"
+	}
+	OK "All Configuration Files Found"
+}
+
+
+########################################################## CONFIGURATION READS
+
+function CheckCommonConfig() {
+	CONFIGURATIONS="$COMMON_CONFIGURATIONS"
+	CheckConfig "$CONFIGURATIONS"
+}
+
+function CheckInConfig() {
+	CONFIGURATIONS="$COMMON_CONFIGURATIONS $IN_CONFIGURATIONS"
+	CheckConfig "$CONFIGURATIONS"
+}
+
+function CheckOutConfig() {
+	CONFIGURATIONS="$COMMON_CONFIGURATIONS $OUT_CONFIGURATIONS"
+	CheckConfig "$CONFIGURATIONS"
+}
+
+function CheckAllConfig() {
+	CONFIGURATIONS="$COMMON_CONFIGURATIONS $IN_CONFIGURATIONS $OUT_CONFIGURATIONS"
+	CheckConfig "$CONFIGURATIONS"
+}
+
+function ReadCommonConfig() {
+	Header "Reading Configurations"
+}
+
+function ReadInConfig() {
+	[ -z "${DEFAULT_INPUT+set}" ] && Warn "DEFAULT_INPUT not defined in '$C_POLICIES'" && NextLine 'Using DEFAULT_INPUT="ACCEPT"' && DEFAULT_INPUT="ACCEPT"
+	[ -z "${IN_TCP_PORTS+set}" ] && Warn "IN_TCP_PORTS not defined in '$C_IN_TCP_ALL_ALLOWS'"
+	[ -z "${IN_UDP_PORTS+set}" ] && Warn "IN_UDP_PORTS not defined in '$C_IN_UDP_ALL_ALLOWS'"
+	[ -z "${IN_TCP_HOSTS+set}" ] && Warn "IN_TCP_HOSTS not defined in '$C_IN_TCP_HOST_ALLOWS'"
+	[ -z "${IN_UDP_HOSTS+set}" ] && Warn "IN_UDP_HOSTS not defined in '$C_IN_UDP_HOST_ALLOWS'"
+}
+
+function ReadOutConfig() {
+	[ -z "${DEFAULT_OUTPUT+set}" ] && Warn "DEFAULT_OUTPUT not defined in '$C_POLICIES'" && NextLine 'Using DEFAULT_OUTPUT="ACCEPT"' && DEFAULT_OUTPUT="ACCEPT"
+	[ -z "${OUT_TCP_PORTS+set}" ] && Warn "OUT_TCP_PORTS not defined in '$C_OUT_TCP_ALL_ALLOWS'"
+	[ -z "${OUT_UDP_PORTS+set}" ] && Warn "OUT_UDP_PORTS not defined in '$C_OUT_UDP_ALL_ALLOWS'"
+	[ -z "${OUT_TCP_HOSTS+set}" ] && Warn "OUT_TCP_HOSTS not defined in '$C_OUT_TCP_HOST_ALLOWS'"
+	[ -z "${OUT_UDP_HOSTS+set}" ] && Warn "OUT_UDP_HOSTS not defined in '$C_OUT_UDP_HOST_ALLOWS'"
+}
+
+function ReadForwardConfig() {
+	[ -z "${DEFAULT_FORWARD+set}" ] && Warn "DEFAULT_FORWARD not defined in '$C_POLICIES'" && NextLine 'Using DEFAULT_FORWARD="ACCEPT"' && DEFAULT_FORWARD="ACCEPT"
+}
+
+function ReadYumConfig() {
+	[ -z "${YUM_ENABLE+set}" ] && Warn "YUM_ENABLE not defined in '$C_POLICIES'" && NextLine 'Using YUM_ENABLE="NO"' && YUM_ENABLE="NO"
+	YUM_ENABLE=$(echo "$YUM_ENABLE" | tr 'a-z' 'A-Z')
+}
+
+function ReadAllConfig() {
+	ReadCommonConfig
+	ReadInConfig
+	ReadOutConfig
+	ReadForwardConfig
+	ReadYumConfig
+}
+
+
+########################################################## SETUP STARTS
+function Flush() {
+	CHAINS="$1"
+	# Flush Iptables
+	Header "Reverting Policy And Flushing Rules"
+	for CHAIN in $CHAINS
+	{
+		${IPFW} -P $CHAIN ACCEPT
+		${IPFW} -F $CHAIN
+	}
+}
+
+function DeleteChains() {
+	## Delete Chains
+	Header "Deleting Non-Default IPTables CHAINS"
+	for chain in $(iptables -nL | grep  ^Chain | awk '{print $2}' | grep -v "^INPUT$" | grep -v "^OUTPUT$" | grep -v "^FORWARD$")
+	{
+		${IPFW} -F $chain
+		${IPFW} -X $chain
+	}		
+}
+
+
+function DefaultCommonRules() {
+	#Setting Default Rules
+	Header "Setting Default Rules"
+}
+
+function DefaultInRules() {
+	${IPFW} -A INPUT -i lo -j ACCEPT
+	${IPFW} -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+}
+
+function DefaultOutRules() {
+	${IPFW} -A OUTPUT -o lo -j ACCEPT
+	${IPFW} -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+}
+
+function DefaultRules() {
+	DefaultCommonRules
+	DefaultInRules
+	DefaultOutRules
+}
+
+
+#INBOUND
+function Inbound() {
+	if [ ! -z "$IN_ICMP" ]
+	then
+		Header "Setting up ICMP INBOUND"
+		for HOST in $IN_ICMP
+		{
+			HOSTVAR="HOST_"$HOST
+			IP=${!HOSTVAR}
+			Accept 
+			echo "icmp from $HOST ($IP) to me"
+			CMD="${IPFW} -A INPUT --src $IP -p icmp --icmp-type 8 -j ACCEPT"
+			CheckSyntax "$CMD"
+	 		CMD="${IPFW} -A INPUT --src $IP -p icmp --icmp-type 0 -j ACCEPT"
+			CheckSyntax "$CMD"
+		}
+	fi
+	if [ -e "$C_IN_ADVANCED_PREPEND" ]
+	then
+		[ $(grep -h -E -v '#|^[\t\ ]*$' "$C_IN_ADVANCED_PREPEND" | wc -l) -gt 0 ] && Header "Setting up INBOUND Prepend Rules"
+		grep -h -E -v '#|^[\t\ ]*$' "$C_IN_ADVANCED_PREPEND" | while read RULE
+		do
+			CMD="${IPFW} -A INPUT $RULE"
+			AdvancedInfo "$CMD"
+			CheckSyntax "$CMD"
+		done
+	fi
+	TYPES="TCP UDP"
+	for TYPE in ${TYPES}
+	{
+		Header "Setting up $TYPE INBOUND"
+		RULES_COUNT=0
+		PROTOCOL=$(echo "$TYPE" | tr 'A-Z' 'a-z')
+	
+		TYPEPORTSVAR="IN_${TYPE}_PORTS"
+		TYPEHOSTSVAR="IN_${TYPE}_HOSTS"
+	
+		CINTYPEALLALLOWSVAR="C_IN_${TYPE}_ALL_ALLOWS"
+		CINTYPEHOSTALLOWSVAR="C_IN_${TYPE}_HOST_ALLOWS"
+		CINTYPEALLOWSVAR="C_IN_${TYPE}_ALLOWS"
+		for PORTVAR in ${!TYPEPORTSVAR}
+		{
+			VAR="PORT_"$PORTVAR
+			PORT=${!VAR}
+			[ -z "$PORT" ] && VariableError "$PORTVAR" "${!CINTYPEALLALLOWSVAR}" "$VAR" "$C_PORTS"
+			RULES_COUNT=$(( RULES_COUNT + 1 ))
+			AcceptInPort "INPUT" "$PROTOCOL" "$PORT" "$PORTVAR"
+		}
+		for HOSTVAR in ${!TYPEHOSTSVAR}
+		{
+			VAR="HOST_"$HOSTVAR
+			HOST=${!VAR}
+			[ -z "$HOST" ] && VariableError "$HOSTVAR" "${!CINTYPEHOSTALLOWSVAR}" "$VAR" "$C_HOSTS_AND_NETWORKS"
+			RULES_COUNT=$(( RULES_COUNT + 1 ))
+			AcceptInHost "INPUT" "$HOST" "$HOSTVAR"
+		}
+		while read ENTRY 
+		do
+			PORTVAR=$(echo "$ENTRY" | awk -F'=' '{print $1}' | sed s"/IN_//g")
+			VAR="PORT_"$PORTVAR
+			PORTS=${!VAR}
+			for PORT in ${PORTS}
+			{
+				VALUES=$(echo "$ENTRY" | awk -F'=' '{print $2}' | sed "s/\"//g")
+				for VALUE in ${VALUES}
+				{
+					HOSTVAR="HOST_"$VALUE
+					HOST=${!HOSTVAR}
+					[ -z "$HOST" ] && VariableError "$VALUE" "${!COUTTYPEALLOWSVAR}" "$HOSTVAR" "$C_HOSTS_AND_NETWORKS"
+					AcceptInPort "INPUT" "$PROTOCOL" "$PORT" "$PORTVAR" "$HOST" "$VALUE"
+					RULES_COUNT=$(( RULES_COUNT + 1 ))
+				}
+			}
+		done < ${!CINTYPEALLOWSVAR}
+		[ $RULES_COUNT -eq 0 ] && Info "No Rules Defined" 
+	} 
+	if [ -e "$C_IN_ADVANCED_APPEND" ]
+	then
+		[ $(grep -h -E -v '#|^[\t\ ]*$' "$C_IN_ADVANCED_APPEND" | wc -l) -gt 0 ] && Header "Setting up INBOUND Append Rules"
+		grep -h -E -v '#|^[\t\ ]*$' "$C_IN_ADVANCED_APPEND" | while read RULE
+		do
+			CMD="${IPFW} -A INPUT $RULE"
+			AdvancedInfo "$CMD"
+			CheckSyntax "$CMD"
+		done
+	fi
+}
+
+#OUTBOUND
+function Outbound() {
+	if [ ! -z "$OUT_ICMP" ]
+	then
+		Header "Setting up ICMP OUTBOUND"
+		for HOST in $OUT_ICMP
+		{
+			HOSTVAR="HOST_"$HOST
+			IP=${!HOSTVAR}
+			Accept 
+			echo "icmp from me to $HOST ($IP)"
+			CMD="${IPFW} -A OUTPUT --dst $IP -p icmp --icmp-type 8 -j ACCEPT"
+			CheckSyntax "$CMD"
+	 		CMD="${IPFW} -A OUTPUT --dst $IP -p icmp --icmp-type 0 -j ACCEPT"
+			CheckSyntax "$CMD"
+		}
+	fi
+	if [ -e "$C_OUT_ADVANCED_PREPEND" ]
+	then
+		[ $(grep -h -E -v '#|^[\t\ ]*$' "$C_OUT_ADVANCED_PREPEND" | wc -l) -gt 0 ] && Header "Setting up OUTBOUND Prepend Rules"
+		grep -h -E -v '#|^[\t\ ]*$' "$C_OUT_ADVANCED_PREPEND" | while read RULE
+		do
+			Header "Setting up OUTBOUND Prepend Rules"
+			CMD="${IPFW} -A OUTPUT $RULE"
+			AdvancedInfo "$CMD"
+			CheckSyntax "$CMD"
+		done
+	fi
+	TYPES="TCP UDP"
+	for TYPE in ${TYPES}
+	{
+		Header "Setting up $TYPE OUTBOUND"
+		RULES_COUNT=0
+		PROTOCOL=$(echo "$TYPE" | tr 'A-Z' 'a-z')
+
+		TYPEPORTSVAR="OUT_${TYPE}_PORTS"
+		TYPEHOSTSVAR="OUT_${TYPE}_HOSTS"
+	
+		COUTTYPEALLALLOWSVAR="C_OUT_${TYPE}_ALL_ALLOWS"
+		COUTTYPEHOSTALLOWSVAR="C_OUT_${TYPE}_HOST_ALLOWS"
+		COUTTYPEALLOWSVAR="C_OUT_${TYPE}_ALLOWS"
+		for PORTVAR in ${!TYPEPORTSVAR}
+		{
+			VAR="PORT_"$PORTVAR
+			PORT=${!VAR}
+			[ -z "$PORT" ] && VariableError "$PORTVAR" "${!COUTTYPEALLALLOWSVAR}" "$VAR" "$C_PORTS"
+			RULES_COUNT=$(( RULES_COUNT + 1 ))
+			AcceptOutPort "OUTPUT" "$PROTOCOL" "$PORT" "$PORTVAR"
+		}
+		for HOSTVAR in ${!TYPEHOSTSVAR}
+		{
+			VAR="HOST_"$HOSTVAR
+			HOST=${!VAR}
+			[ -z "$HOST" ] && VariableError "$HOSTVAR" "${!COUTTYPEHOSTALLOWSVAR}" "$VAR" "$C_HOSTS_AND_NETWORKS"
+			RULES_COUNT=$(( RULES_COUNT + 1 ))
+			AcceptOutHost "OUTPUT" "$HOST" "$HOSTVAR"
+		}	
+		while read ENTRY 
+		do
+			PORTVAR=$(echo "$ENTRY" | awk -F'=' '{print $1}' | sed s"/OUT_//g")
+			VAR="PORT_"$PORTVAR
+			PORTS=${!VAR}
+			for PORT in ${PORTS}
+			{
+				VALUES=$(echo "$ENTRY" | awk -F'=' '{print $2}' | sed "s/\"//g")
+				for VALUE in ${VALUES}
+				{
+					HOSTVAR="HOST_"$VALUE
+					HOST=${!HOSTVAR}
+					[ -z "$HOST" ] && VariableError "$VALUE" "${!COUTTYPEALLOWSVAR}" "$HOSTVAR" "$C_HOSTS_AND_NETWORKS"
+					AcceptOutPort "OUTPUT" "$PROTOCOL" "$PORT" "$PORTVAR" "$HOST" "$VALUE"
+					RULES_COUNT=$(( RULES_COUNT + 1 ))
+				}
+			}
+		done < ${!COUTTYPEALLOWSVAR}
+		[ $RULES_COUNT -eq 0 ] && Info "No Rules Defined" 
+	} 
+	if [ -e "$C_OUT_ADVANCED_APPEND" ]
+	then
+		[ $(grep -h -E -v '#|^[\t\ ]*$' "$C_OUT_ADVANCED_APPEND" | wc -l) -gt 0 ] && Header "Setting up OUTBOUND Append Rules"
+		grep -h -E -v '#|^[\t\ ]*$' "$C_OUT_ADVANCED_APPEND" | while read RULE
+		do
+			CMD="${IPFW} -A OUTPUT $RULE"
+			AdvancedInfo "$CMD"
+			CheckSyntax "$CMD"
+		done
+	fi
+}
+
+#Forward Rules
+function Forward() {
+	if [ -e "$C_FORWARD_ADVANCED" ]
+	then
+		[ `grep -h -E -v '#|^[\t\ ]*$' "$C_FORWARD_ADVANCED" | wc -l` -ne 0 ] && Header "Setting up FORWARD"
+		grep -h -E -v '#|^[\t\ ]*$' "$C_FORWARD_ADVANCED" | while read RULE
+		do
+			CMD="${IPFW} $RULE"
+			AdvancedInfo "$CMD"
+			CheckSyntax "$CMD"
+		done
+	fi
+}
+
+function DefaultPolicy() {
+	Header "Applying Default Policies"
+}
+
+function CheckDefaultInPolicy() {
+	[ "$DEFAULT_INPUT" = "ACCEPT" ] && ( Warn 'DEFAULT_INPUT="ACCEPT"'; NextLine "It is recommended 'DEFAULT_INPUT' is set to 'DROP' in 'definitions/`basename $C_POLICIES`' except for temporary purpose.")
+}
+
+function CheckDefaultOutPolicy() { 
+	[ "$DEFAULT_OUTPUT" = "ACCEPT" ] && ( Warn 'DEFAULT_OUTPUT="ACCEPT"'; NextLine "It is recommended 'DEFAULT_OUTPUT' is set to 'DROP' in 'definitions/`basename $C_POLICIES`' except for temporary purpose.")
+}
+
+function CheckDefaultForwardPolicy() {
+	[ "$DEFAULT_FORWARD" = "ACCEPT" ] && ( Warn 'DEFAULT_FORWARD="ACCEPT"'; NextLine "It is recommended 'DEFAULT_FORWARD' is set to 'DROP' in 'definitions/`basename $C_POLICIES`' except for temporary purpose.")
+}
+
+function CheckDefaultPolicies() {
+	CheckDefaultInPolicy
+	CheckDefaultOutPolicy
+	CheckDefaultForwardPolicy
+}
+
+function ApplyDefaultInPolicy() {
+	[ "$DEFAULT_INPUT" = "DROP" ] && GreenDrop || RedAccept 
+	echo "INPUT"
+	${IPFW} -P INPUT $DEFAULT_INPUT
+}
+
+function ApplyDefaultOutPolicy() {
+	[ "$DEFAULT_OUTPUT" = "DROP" ] && GreenDrop || RedAccept 
+	echo "OUTPUT"
+	${IPFW} -P OUTPUT $DEFAULT_OUTPUT
+}
+
+function ApplyDefaultForwardPolicy() {
+	[ "$DEFAULT_FORWARD" = "DROP" ] && GreenDrop || RedAccept
+	echo "FORWARD"
+	${IPFW} -P FORWARD $DEFAULT_FORWARD
+}
+
+function ApplyDefaultPolicies() {
+	ApplyDefaultInPolicy
+	ApplyDefaultOutPolicy
+	ApplyDefaultForwardPolicy
+}
+
+function Yum() {
+	Header "Setting YUM"
+	if [ "$YUM_ENABLE" = "YES" ]
+	then
+		ping -c3 google.com > /dev/null
+		if [ $? -ne 0 ]
+		then
+			Warn "Internet not reachable." 
+			NextLine "YUM Chain cannot be created."
+		else
+			which dig > /dev/null
+			if [ $? -eq 0 ]
+			then
+				Header "Deleting YUM Chain"
+				YUM_RULENUM=$(${IPFW} --line-numbers -nL OUTPUT | grep 'YUM' | awk '{print $1}')
+				[ -z "$YUM_RULENUM" ] || ${IPFW} -D OUTPUT $YUM_RULENUM
+				${IPFW} -F YUM 2>/dev/null
+				[ $? -eq 0 ] && ${IPFW} -X YUM
+				SaveIPTables
+				Header "Setting YUM Repos HTTP IPs"
+
+				RULES_COUNT=0
+				Warn "YUM_ENABLE='YES'" 
+				NextLine "It is recommended 'YUM_ENABLE' is set to 'NO' in 'definitions/`basename $C_POLICIES`' except for temporary purpose."
+				CreateChain YUM
+				Info "Temporarily Allowing Output to tcp port 80 for fetching Yum Repos"
+				AcceptOutPort "OUTPUT" "tcp" "80" "HTTP"
+				Info "Fetching Yum mirrorlist IPs"
+				yum repolist > /dev/null
+				Info "Deleting the temporary Allow"
+				${IPFW} -D OUTPUT $(${IPFW} -nL OUTPUT --line-numbers | tail -1 | awk '{print $1}')
+				for HOST in $(grep -rh 'http' /etc/yum.repos.d/CentOS-* /etc/yum.conf /var/cache/yum/* | grep -v -E '^\ *#|Binary file' | sed "s/.*https*:\/\/\([^\/]*\)\/.*/\1/g" | sort | uniq)
+				{	
+					IPS=`dig +short "$HOST" | grep -E "^[\t\ ]*([0-9]\.|[0-9][0-9]\.|1[0-9][0-9]\.|2[0-5][0-5]\.){3}([0-9]|[0-9][0-9]|1[0-9][0-9]|2[0-5][0-5])(/[0-9]{1,2}){0,1}[\t ]*$"`
+					if [ $? -eq 0 ]; then
+						for IP in $IPS
+						{
+							RULES_COUNT=$(( RULES_COUNT + 1 ))
+							AcceptOutPort "YUM" "tcp" "80" "HTTP" "$IP" "$HOST"
+						}
+					fi	
+				}
+				[ $RULES_COUNT -eq 0 ] && Info "No IPs Found in YUM repos" || ChainToChain "OUTPUT" "YUM"
+			else
+				Warn "'dig' command not found for resolving YUM repos."
+				Warn "Used 'yum install bind-utils' to install dig."
+				NextLine "Using YUM_ENABLE='NO'"	
+			fi
+		fi
+	else
+		Info "Disabled"
+	fi
+}
+
+function RestartFirewall() {
+	CheckAllConfig
+	ReadAllConfig
+	SaveIPTables
+	Flush "INPUT OUTPUT FORWARD"
+	DeleteChains
+	/etc/init.d/iptables.org stop
+	DefaultRules
+	Inbound
+	Outbound
+	DefaultPolicy
+	CheckDefaultPolicies
+	ApplyDefaultPolicies
+	Yum
+}
+
+function ReloadInput() {
+	CheckInConfig
+	ReadCommonConfig
+	ReadInConfig
+	SaveIPTables
+	Flush "INPUT"
+	DefaultInRules
+	Inbound
+	DefaultPolicy
+	CheckDefaultInPolicy
+	ApplyDefaultInPolicy
+	SaveIPTables
+}
+
+function ReloadOutput() {
+	CheckOutConfig
+	ReadCommonConfig
+	ReadOutConfig
+	SaveIPTables
+	Flush "OUTPUT"
+	DefaultOutRules
+	Outbound
+	DefaultPolicy
+	CheckDefaultOutPolicy
+	ApplyDefaultOutPolicy
+	SaveIPTables
+}
+
+function ReloadForward() {
+	CheckCommonConfig
+	ReadCommonConfig
+	SaveIPTables
+	Flush "FORWARD"
+	Forward
+	DefaultPolicy
+	CheckDefaultForwardPolicy
+	ApplyDefaultForwardPolicy
+	SaveIPTables
+}
+
+function ReloadYum() {
+	CheckCommonConfig
+	ReadCommonConfig
+	ReadYumConfig
+	Yum
+}
+
+function Stop() {
+	Flush "INPUT OUTPUT FORWARD"
+	DeleteChains
+	/etc/init.d/iptables.org stop
+}
+
+function UsageInfo() {
+	cat <<EOF
+
+AppliedFirewall
+(c) [2014] Worldlink Communications Pvt. Ltd.
+Designed and Developed by Abhishek S. Okheda <abhi.emailto@gmail.com>
+2014-09-06
+
+Usage:
+./AppliedFirewall <command>
+
+<commands>
+	status
+	stop
+	start
+	restart
+	reload inbound
+	reload outbound
+	reload forward
+	reload yum
+
+Definition Files	: $DEFINITIONS_DIR/
+Rule Files		: $RULES_DIR/
+EOF
+}
+
+COMMAND="$@"
+
+[ "$COMMAND" = "status" ] && ${IPFW} -nvL && echo "" && exit 0
+[ "$COMMAND" = "start" ] && RestartFirewall && echo "" && exit 0
+[ "$COMMAND" = "stop" ] && Stop echo "" && exit 0
+[ "$COMMAND" = "restart" ] && RestartFirewall && echo "" && exit 0
+[ "$COMMAND" = "reload inbound" ] && ReloadInput && echo "" && exit 0
+[ "$COMMAND" = "reload outbound" ] && ReloadOutput && echo "" && exit 0
+[ "$COMMAND" = "reload forward" ] && ReloadForward && echo "" && exit 0
+[ "$COMMAND" = "reload yum" ] && ReloadYum && exit 0
+UsageInfo
+echo ""
+

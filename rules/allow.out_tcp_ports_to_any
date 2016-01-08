@@ -1,0 +1,15 @@
+ AppliedFirewall
+# (c) [2014] Worldlink Communications Pvt. Ltd.
+#
+# OUTBOUND ALLOWED PORTS FOR TCP
+# This file defines the variable 'OUT_TCP_PORTS'
+# This variable includes the TCP PORTS ON REMOTE MACHINE TO BE ALLOWED FROM LOCALHOST
+# The SPACE SEPARATED values are PORT variables defined on 'definitions/ports' definition file without the "PORT_" prefix
+#
+# EXAMPLES
+# If 'definitions/ports' defines a port 'PORT_SSH' and port 'PORT_HTTP' which are to be from localhost
+# The OUT_TCP_PORTS should be set as
+# OUT_TCP_PORTS="SSH HTTP"
+#
+
+OUT_TCP_PORTS="DNS"
